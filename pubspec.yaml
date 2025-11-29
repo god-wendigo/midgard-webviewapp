@@ -1,0 +1,27 @@
+name: midgard
+description: A Flutter WebView app with native bottom navigation UI.
+publish_to: "none" # Not for pub.dev
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.2.2
+  webview_flutter: ^4.7.0    # WebView
+  #cupertino_icons: ^1.0.6     # iOS icon pack (optional)
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0       # Clean linting rules
+
+flutter:
+
+  uses-material-design: true
+
+  assets:
+    - assets/images/         # If you add icons later
+    - assets/html/           # If using offline page support later
