@@ -26,7 +26,7 @@ class WebViewScreenState extends State<WebViewScreen> {
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.transparent)
-      ..setUserAgent('MyCustomUserAgent/1.0') // <-- Your custom User-Agent
+      ..setUserAgent('Midgard/1.0') // <-- Your custom User-Agent
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (url) {
@@ -100,6 +100,10 @@ class WebViewScreenState extends State<WebViewScreen> {
     if (await controller.canGoBack()) {
       controller.goBack();
     }
+  }
+
+  Future<void> clearCache() async {
+    await controller.clearCache();
   }
 
   @override

@@ -18,29 +18,22 @@ class BookmarkService {
     for (var item in raw) {
       try {
         list.add(Map<String, String>.from(jsonDecode(item)));
-      } catch (_) {
-        // Skip corrupted entry
-      }
+      } catch (_) {}
     }
 
     // Prevent duplicates
-    if (list.any((e) => e["url"] == url)) {
-      return;
-    }
+    if (list.any((e) => e["url"] == url)) return;
 
     list.add({"title": title, "url": url});
 
-    // Save new list
     List<String> encoded =
         list.map((e) => jsonEncode(e)).toList(growable: false);
-
     await prefs.setStringList(key, encoded);
 
-    // Notify UI
     onBookmarksUpdated?.call();
   }
 
-  /// Load bookmarks safely (skips corrupted or old entries)
+  /// Load bookmarks safely
   static Future<List<Map<String, String>>> loadBookmarks() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(key) ?? [];
@@ -50,15 +43,13 @@ class BookmarkService {
     for (var item in raw) {
       try {
         list.add(Map<String, String>.from(jsonDecode(item)));
-      } catch (_) {
-        // skip corrupted entry
-      }
+      } catch (_) {}
     }
 
     return list;
   }
 
-  /// Delete bookmark by URL
+  /// Delete one bookmark by URL
   static Future<void> deleteBookmark(String url) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(key) ?? [];
@@ -68,17 +59,18 @@ class BookmarkService {
     for (var item in raw) {
       try {
         final decoded = jsonDecode(item);
-
-        if (decoded["url"] != url) {
-          cleaned.add(item);
-        }
-      } catch (_) {
-        // skip corrupted item
-      }
+        if (decoded["url"] != url) cleaned.add(item);
+      } catch (_) {}
     }
 
     await prefs.setStringList(key, cleaned);
+    onBookmarksUpdated?.call();
+  }
 
+  /// ⭐ Clear all bookmarks completely
+  static Future<void> clearAll() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(key);
     onBookmarksUpdated?.call();
   }
 }
