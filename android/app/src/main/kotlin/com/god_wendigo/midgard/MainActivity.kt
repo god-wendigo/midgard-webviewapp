@@ -1,4 +1,4 @@
-package com.god_wendigod.midgard
+package com.god_wendigo.midgard
 
 import android.os.Bundle
 import android.view.WindowManager

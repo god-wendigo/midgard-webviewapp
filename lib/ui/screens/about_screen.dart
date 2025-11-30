@@ -23,8 +23,7 @@ class AboutScreen extends StatelessWidget {
             SizedBox(height: 8),
             Text("• Save & open bookmarks instantly\n"
                 "• Light/Dark mode\n"
-                "• Clean fast browsing experience\n"
-                "• Built with Flutter & Material Design"),
+                "• Clean fast browsing experience\n\nDeveloped by god-wendigo"),
           ],
         ),
       ),
