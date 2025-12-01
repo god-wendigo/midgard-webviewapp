@@ -66,16 +66,34 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
                 return ListTile(
                   leading: const Icon(Icons.bookmark, color: Colors.blueAccent),
-                  title: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  title: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        // first part: Post Title
+                        title.split(' - ').first,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      if (title.split(' - ').length > 1)
+                        Text(
+                          // second part: Chapter 1
+                          title.split(' - ')[1],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              const TextStyle(color: Colors.grey, fontSize: 14),
+                        ),
+                    ],
                   ),
                   onTap: () => _openBookmark(url),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete_forever, color: Colors.red),
                     onPressed: () async {
                       await BookmarkService.deleteBookmark(url);
+                      loadBookmarks(); // Refresh after deletion
                     },
                   ),
                 );
