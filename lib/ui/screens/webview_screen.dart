@@ -25,7 +25,7 @@ class WebViewScreenState extends State<WebViewScreen>
   bool _isOffline = false;
   String? _lastUrl;
 
-  static const String homeUrl = "https://midgardtranslation.org";
+  static const String homeUrl = "https://midgardtranslation.org/wp-admin";
 
   @override
   void initState() {
@@ -266,7 +266,6 @@ class WebViewScreenState extends State<WebViewScreen>
         ),
         body: Stack(
           children: [
-            // Only show WebView when online
             if (!_isOffline)
               RefreshIndicator(
                 onRefresh: () async {
@@ -276,13 +275,15 @@ class WebViewScreenState extends State<WebViewScreen>
                     await _retry();
                   }
                 },
-                child: WebViewWidget(controller: controller),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: SizedBox(
+                    height: MediaQuery.of(context).size.height,
+                    child: WebViewWidget(controller: controller),
+                  ),
+                ),
               ),
-
-            // Show OfflineScreen when offline
             if (_isOffline) OfflineScreen(onRetry: _retry),
-
-            // Loading overlay
             if (_isLoading && !_isOffline) const LoadingScreen(),
           ],
         ),
