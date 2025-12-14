@@ -259,13 +259,34 @@ class WebViewScreenState extends State<WebViewScreen>
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: saveBookmark,
-          icon: const Icon(Icons.bookmark_add_outlined),
-          label: const Text("Save"),
+        floatingActionButton: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            FloatingActionButton(
+              heroTag: "refresh",
+              mini: true,
+              onPressed: () async {
+                try {
+                  await controller.reload();
+                } catch (_) {
+                  await _retry();
+                }
+              },
+              child: const Icon(Icons.refresh),
+            ),
+            const SizedBox(height: 10),
+            FloatingActionButton.extended(
+              heroTag: "bookmark",
+              onPressed: saveBookmark,
+              icon: const Icon(Icons.bookmark_add_outlined),
+              label: const Text("Save"),
+            ),
+          ],
         ),
         body: Stack(
           children: [
+            // Only show WebView when online
             if (!_isOffline)
               RefreshIndicator(
                 onRefresh: () async {
@@ -275,15 +296,11 @@ class WebViewScreenState extends State<WebViewScreen>
                     await _retry();
                   }
                 },
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  child: SizedBox(
-                    height: MediaQuery.of(context).size.height,
-                    child: WebViewWidget(controller: controller),
-                  ),
-                ),
+                child: WebViewWidget(controller: controller),
               ),
+            // Show OfflineScreen when offline
             if (_isOffline) OfflineScreen(onRetry: _retry),
+            // Loading overlay
             if (_isLoading && !_isOffline) const LoadingScreen(),
           ],
         ),
