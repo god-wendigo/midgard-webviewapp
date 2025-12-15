@@ -54,16 +54,17 @@ class WebViewScreenState extends State<WebViewScreen>
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.transparent)
-      ..setUserAgent('Midgard/1.0')
+      ..setUserAgent("Midgard/1.0 (Android Webview)")
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: _handleNavigationRequest,
           onPageStarted: (_) {
-            if (mounted)
+            if (mounted) {
               setState(() {
                 _isLoading = true;
                 _isOffline = false;
               });
+            }
           },
           onPageFinished: (url) async {
             _lastUrl = url;
@@ -160,24 +161,24 @@ class WebViewScreenState extends State<WebViewScreen>
     widget.onBookmarkAdded?.call();
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Bookmark saved: $title")),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text("Bookmark saved: $title")));
   }
 
   Future<void> clearCache() async {
     try {
       await controller.clearCache();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Cache cleared.")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Cache cleared.")));
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Failed to clear cache.")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Failed to clear cache.")));
       }
     }
   }
@@ -192,7 +193,8 @@ class WebViewScreenState extends State<WebViewScreen>
 
   // ---------------- Navigation handler ----------------
   Future<NavigationDecision> _handleNavigationRequest(
-      NavigationRequest request) async {
+    NavigationRequest request,
+  ) async {
     final uri = Uri.parse(request.url);
 
     // Open external links outside app
