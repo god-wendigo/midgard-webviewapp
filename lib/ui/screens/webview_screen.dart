@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../../service/bookmark_service.dart';
-import 'loading_screen.dart';
 import 'offline_screen.dart';
 
 class WebViewScreen extends StatefulWidget {
@@ -21,9 +21,9 @@ class WebViewScreenState extends State<WebViewScreen>
     with WidgetsBindingObserver {
   late final WebViewController controller;
 
-  bool _isLoading = true;
   bool _isOffline = false;
   String? _lastUrl;
+  double _progress = 0.0;
 
   static const String homeUrl = "https://midgardtranslation.org/wp-admin";
 
@@ -33,11 +33,13 @@ class WebViewScreenState extends State<WebViewScreen>
     WidgetsBinding.instance.addObserver(this);
     _initWebView();
     _load(homeUrl);
+    if (WebViewPlatform.instance is AndroidWebViewPlatform) {
+      AndroidWebViewController.enableDebugging(false);
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Reload last URL on resume to avoid Android white-screen edge-cases
     if (state == AppLifecycleState.resumed && !_isOffline && _lastUrl != null) {
       controller.loadRequest(Uri.parse(_lastUrl!));
     }
@@ -57,23 +59,39 @@ class WebViewScreenState extends State<WebViewScreen>
       ..setUserAgent("Midgard/1.0 (Android Webview)")
       ..setNavigationDelegate(
         NavigationDelegate(
-          onNavigationRequest: _handleNavigationRequest,
+          onProgress: (progress) {
+            if (mounted) {
+              setState(() {
+                _progress = progress / 100.0;
+              });
+            }
+          },
           onPageStarted: (_) {
             if (mounted) {
               setState(() {
-                _isLoading = true;
+                _progress = 0.0;
                 _isOffline = false;
               });
             }
           },
           onPageFinished: (url) async {
             _lastUrl = url;
-            if (mounted) setState(() => _isLoading = false);
+            if (mounted) {
+              setState(() {
+                _progress = 1.0;
+              });
+            }
 
-            // Inject viewport & protections
             await controller.runJavaScript('''
               try {
                 var meta = document.querySelector('meta[name="viewport"]');
+                document.querySelectorAll('input').forEach(function(input) {
+                input.setAttribute('autocomplete', 'off');
+                });
+                document.querySelectorAll('input[type="password"]').forEach(function(pwd) {
+                pwd.setAttrubute('autocomplete', 'new-password');
+                });
+                }
                 if (!meta) {
                   meta = document.createElement('meta');
                   meta.name = 'viewport';
@@ -83,7 +101,7 @@ class WebViewScreenState extends State<WebViewScreen>
                 document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
                 document.body.style.webkitTouchCallout = 'none';
                 document.body.style.userSelect = 'none';
-              } catch (e) { }
+              } catch (e) {}
             ''');
           },
           onWebResourceError: (_) async {
@@ -91,12 +109,17 @@ class WebViewScreenState extends State<WebViewScreen>
             if (!hasNet && mounted) {
               setState(() {
                 _isOffline = true;
-                _isLoading = false;
+                _progress = 0.0;
               });
             }
           },
+          onNavigationRequest: _handleNavigationRequest,
         ),
-      );
+      )
+      ..runJavaScript('''if (window.AndroidAutoFill) {
+      AndroidAutoFill.disable();
+      }
+      ''');
   }
 
   // ---------------- Internet check ----------------
@@ -104,8 +127,6 @@ class WebViewScreenState extends State<WebViewScreen>
     try {
       final result = await InternetAddress.lookup('google.com');
       return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
-    } on SocketException {
-      return false;
     } catch (_) {
       return false;
     }
@@ -115,29 +136,32 @@ class WebViewScreenState extends State<WebViewScreen>
   Future<void> _load(String url) async {
     final hasNet = await _hasInternet();
     if (!hasNet) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isOffline = true;
-          _isLoading = false;
+          _progress = 0.0;
         });
+      }
       return;
     }
 
-    if (mounted)
+    if (mounted) {
       setState(() {
         _isOffline = false;
-        _isLoading = true;
+        _progress = 0.0;
       });
+    }
 
     _lastUrl = url;
     try {
       await controller.loadRequest(Uri.parse(url));
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isOffline = true;
-          _isLoading = false;
+          _progress = 0.0;
         });
+      }
     }
   }
 
@@ -161,24 +185,24 @@ class WebViewScreenState extends State<WebViewScreen>
     widget.onBookmarkAdded?.call();
 
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text("Bookmark saved: $title")));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Bookmark saved: $title")),
+    );
   }
 
   Future<void> clearCache() async {
     try {
       await controller.clearCache();
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("Cache cleared.")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Cache cleared.")),
+        );
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("Failed to clear cache.")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Failed to clear cache.")),
+        );
       }
     }
   }
@@ -197,7 +221,6 @@ class WebViewScreenState extends State<WebViewScreen>
   ) async {
     final uri = Uri.parse(request.url);
 
-    // Open external links outside app
     if ((uri.scheme == 'http' || uri.scheme == 'https') &&
         !uri.host.contains(Uri.parse(homeUrl).host)) {
       try {
@@ -206,18 +229,17 @@ class WebViewScreenState extends State<WebViewScreen>
       return NavigationDecision.prevent;
     }
 
-    // Prevent navigation if offline
     if (!await _hasInternet()) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isOffline = true;
-          _isLoading = false;
+          _progress = 0.0;
         });
+      }
       return NavigationDecision.prevent;
     }
 
     _lastUrl = request.url;
-    if (mounted) setState(() => _isLoading = true);
     return NavigationDecision.navigate;
   }
 
@@ -288,7 +310,6 @@ class WebViewScreenState extends State<WebViewScreen>
         ),
         body: Stack(
           children: [
-            // Only show WebView when online
             if (!_isOffline)
               RefreshIndicator(
                 onRefresh: () async {
@@ -300,10 +321,20 @@ class WebViewScreenState extends State<WebViewScreen>
                 },
                 child: WebViewWidget(controller: controller),
               ),
-            // Show OfflineScreen when offline
+
             if (_isOffline) OfflineScreen(onRetry: _retry),
-            // Loading overlay
-            if (_isLoading && !_isOffline) const LoadingScreen(),
+
+            // 🔹 Top linear progress bar
+            if (_progress < 1.0 && !_isOffline)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(
+                  value: _progress,
+                  minHeight: 3,
+                ),
+              ),
           ],
         ),
       ),

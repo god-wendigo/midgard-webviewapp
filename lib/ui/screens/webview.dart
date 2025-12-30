@@ -1,6 +1,5 @@
 // lib/ui/screens/webview_screen.dart
-
-// no using this code file
+// this code isn't used
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -27,7 +26,7 @@ class WebViewScreenState extends State<WebViewScreen>
   bool _isOffline = false;
   String? _lastUrl;
 
-  static const String homeUrl = "https://midgardtranslation.org";
+  static const String homeUrl = "https://midgardtranslation.org/wp-admin";
 
   @override
   void initState() {
@@ -39,7 +38,7 @@ class WebViewScreenState extends State<WebViewScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // optional: reload last url on resume to avoid Android white-screen edge-cases
+    // Reload last URL on resume to avoid Android white-screen edge-cases
     if (state == AppLifecycleState.resumed && !_isOffline && _lastUrl != null) {
       controller.loadRequest(Uri.parse(_lastUrl!));
     }
@@ -56,24 +55,23 @@ class WebViewScreenState extends State<WebViewScreen>
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.transparent)
-      ..setUserAgent('Midgard/1.0')
+      ..setUserAgent("Midgard/1.0 (Android Webview)")
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: _handleNavigationRequest,
-          onPageStarted: (url) {
-            setState(() {
-              _isLoading = true;
-              _isOffline = false;
-            });
+          onPageStarted: (_) {
+            if (mounted) {
+              setState(() {
+                _isLoading = true;
+                _isOffline = false;
+              });
+            }
           },
           onPageFinished: (url) async {
             _lastUrl = url;
+            if (mounted) setState(() => _isLoading = false);
 
-            Future.delayed(const Duration(milliseconds: 700), () async {
-              if (mounted) setState(() => _isLoading = false);
-            });
-
-            // Inject viewport & optional protections to ensure overlays (search/modal) appear correctly
+            // Inject viewport & protections
             await controller.runJavaScript('''
               try {
                 var meta = document.querySelector('meta[name="viewport"]');
@@ -86,16 +84,8 @@ class WebViewScreenState extends State<WebViewScreen>
                 document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
                 document.body.style.webkitTouchCallout = 'none';
                 document.body.style.userSelect = 'none';
-              } catch (e) { /* ignore */ }
+              } catch (e) { }
             ''');
-
-            // only set loading false when done
-            if (mounted) {
-              setState(() {
-                _isLoading = false;
-                _isOffline = false;
-              });
-            }
           },
           onWebResourceError: (_) async {
             final hasNet = await _hasInternet();
@@ -124,68 +114,39 @@ class WebViewScreenState extends State<WebViewScreen>
 
   // ---------------- Load helpers ----------------
   Future<void> _load(String url) async {
-    if (!await _hasInternet()) {
-      if (mounted) {
+    final hasNet = await _hasInternet();
+    if (!hasNet) {
+      if (mounted)
         setState(() {
           _isOffline = true;
           _isLoading = false;
         });
-      }
       return;
     }
 
-    if (mounted) {
+    if (mounted)
       setState(() {
         _isOffline = false;
         _isLoading = true;
       });
-    }
 
     _lastUrl = url;
     try {
       await controller.loadRequest(Uri.parse(url));
     } catch (_) {
-      if (mounted) setState(() => _isOffline = true);
+      if (mounted)
+        setState(() {
+          _isOffline = true;
+          _isLoading = false;
+        });
     }
   }
 
   Future<void> _loadSafely(String url) async => _load(url);
 
-  // ---------------- Public helpers you asked for ----------------
+  // ---------------- Public helpers ----------------
+  Future<void> openBookmark(String url) async => _load(url);
 
-  /// Open a bookmark URL inside the webview
-  Future<void> openBookmark(String url) async {
-    _lastUrl = url;
-    if (!await _hasInternet()) {
-      if (mounted) {
-        setState(() {
-          _isOffline = true;
-          _isLoading = false;
-        });
-      }
-      return;
-    }
-
-    if (mounted) {
-      setState(() {
-        _isOffline = false;
-        _isLoading = true;
-      });
-    }
-
-    try {
-      await controller.loadRequest(Uri.parse(url));
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _isOffline = true;
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  /// Save current url as bookmark
   Future<void> saveBookmark() async {
     final url = _lastUrl;
     if (url == null || url.isEmpty) return;
@@ -201,33 +162,30 @@ class WebViewScreenState extends State<WebViewScreen>
     widget.onBookmarkAdded?.call();
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Bookmark saved: $title")),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text("Bookmark saved: $title")));
   }
 
-  /// Clear webview cache
   Future<void> clearCache() async {
     try {
       await controller.clearCache();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Cache cleared.")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Cache cleared.")));
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Failed to clear cache.")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Failed to clear cache.")));
       }
     }
   }
 
-  /// Check whether the webview can go back
   Future<bool> canGoBack() => controller.canGoBack();
 
-  /// Navigate back in webview history if possible
   Future<void> goBack() async {
     if (await controller.canGoBack()) {
       await controller.goBack();
@@ -236,28 +194,26 @@ class WebViewScreenState extends State<WebViewScreen>
 
   // ---------------- Navigation handler ----------------
   Future<NavigationDecision> _handleNavigationRequest(
-      NavigationRequest request) async {
+    NavigationRequest request,
+  ) async {
     final uri = Uri.parse(request.url);
 
-    // external domain -> open externally
+    // Open external links outside app
     if ((uri.scheme == 'http' || uri.scheme == 'https') &&
         !uri.host.contains(Uri.parse(homeUrl).host)) {
       try {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } catch (_) {
-        // ignore launch error
-      }
+      } catch (_) {}
       return NavigationDecision.prevent;
     }
 
-    // check internet before navigate
+    // Prevent navigation if offline
     if (!await _hasInternet()) {
-      if (mounted) {
+      if (mounted)
         setState(() {
           _isOffline = true;
           _isLoading = false;
         });
-      }
       return NavigationDecision.prevent;
     }
 
@@ -266,7 +222,7 @@ class WebViewScreenState extends State<WebViewScreen>
     return NavigationDecision.navigate;
   }
 
-  // ---------------- Reload current page ----------------
+  // ---------------- Retry ----------------
   Future<void> _retry() async {
     final url = _lastUrl ?? homeUrl;
     await _loadSafely(url);
@@ -274,13 +230,9 @@ class WebViewScreenState extends State<WebViewScreen>
 
   // ---------------- Back button / exit dialog ----------------
   Future<bool> _onWillPop() async {
-    try {
-      if (await controller.canGoBack()) {
-        await controller.goBack();
-        return false;
-      }
-    } catch (_) {
-      // ignore
+    if (await controller.canGoBack()) {
+      await controller.goBack();
+      return false;
     }
 
     final doExit = await showDialog<bool>(
@@ -310,16 +262,35 @@ class WebViewScreenState extends State<WebViewScreen>
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: saveBookmark,
-          icon: const Icon(Icons.bookmark_add_outlined),
-          label: const Text("Save"),
+        floatingActionButton: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            FloatingActionButton(
+              heroTag: "refresh",
+              mini: true,
+              onPressed: () async {
+                try {
+                  await controller.reload();
+                } catch (_) {
+                  await _retry();
+                }
+              },
+              child: const Icon(Icons.refresh),
+            ),
+            const SizedBox(height: 10),
+            FloatingActionButton.extended(
+              heroTag: "bookmark",
+              onPressed: saveBookmark,
+              icon: const Icon(Icons.bookmark_add_outlined),
+              label: const Text("Save"),
+            ),
+          ],
         ),
         body: Stack(
           children: [
-            if (_isOffline)
-              OfflineScreen(onRetry: _retry)
-            else
+            // Only show WebView when online
+            if (!_isOffline)
               RefreshIndicator(
                 onRefresh: () async {
                   try {
@@ -330,6 +301,9 @@ class WebViewScreenState extends State<WebViewScreen>
                 },
                 child: WebViewWidget(controller: controller),
               ),
+            // Show OfflineScreen when offline
+            if (_isOffline) OfflineScreen(onRetry: _retry),
+            // Loading overlay
             if (_isLoading && !_isOffline) const LoadingScreen(),
           ],
         ),
